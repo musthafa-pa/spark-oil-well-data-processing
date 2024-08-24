@@ -7,26 +7,25 @@ Created on Sat Aug 17 13:40:49 2024
 """
 
 import pandas as pd
-import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.inspection import partial_dependence
 import matplotlib.pyplot as plt
 
-# Sample dataset
+# labelled training data
 data = {
-    'SPP': [3000, 3100, 2900, 3200, 3150, 3300, 3000, 2950, 3400, 3250],
-    'ROP': [50, 55, 53, 47, 45, 60, 58, 52, 49, 50],
-    'Torque': [1000, 1050, 980, 1100, 1080, 1150, 1020, 995, 1180, 1110],
-    'Mud_Weight': [10, 10.5, 9.8, 11, 10.8, 11.5, 10.2, 9.9, 11.8, 11.1],
+    'SPPA': [3000, 3100, 2900, 3200, 3150, 3300, 3000, 2950, 3400, 3250],
+    'ROP30s': [50, 55, 53, 47, 45, 60, 58, 52, 49, 50],
+    'TQ30s': [1000, 1050, 980, 1100, 1080, 1150, 1020, 995, 1180, 1110],
+    'ECD_MW_IN': [10, 10.5, 9.8, 11, 10.8, 11.5, 10.2, 9.9, 11.8, 11.1],
     'Failure': [0, 0, 0, 1, 0, 1, 0, 0, 1, 1]
 }
 
 df = pd.DataFrame(data)
 
 # Features and labels
-X = df[['SPP', 'ROP', 'Torque', 'Mud_Weight']]
+X = df[['SPPA', 'ROP30s', 'TQ30s', 'ECD_MW_IN']]
 y = df['Failure']
 
 # Split data into training and testing sets
@@ -61,7 +60,7 @@ plt.show()
 
 # Partial Dependence Plots
 fig, ax = plt.subplots(figsize=(12, 8))
-features = ['SPP', 'ROP', 'Torque', 'Mud_Weight']
+features = ['SPPA', 'ROP30s', 'TQ30s', 'ECD_MW_IN']
 for feature in features:
     pdp, values = partial_dependence(rf_model, X_train, [feature], kind='both')
     ax.plot(values[0], pdp[0], label=feature)
@@ -74,10 +73,10 @@ plt.show()
 
 # New data for prediction
 new_data = {
-    'SPP': [3100, 3200, 3150],
-    'ROP': [52, 48, 50],
-    'Torque': [1050, 1120, 1085],
-    'Mud_Weight': [10.4, 11.2, 10.9]
+    'SPPA': [3100, 3200, 3150],
+    'ROP30s': [52, 48, 50],
+    'TQ30s': [1050, 1120, 1085],
+    'ECD_MW_IN': [10.4, 11.2, 10.9]
 }
 new_df = pd.DataFrame(new_data)
 
