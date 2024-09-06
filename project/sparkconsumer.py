@@ -12,11 +12,10 @@ import pandas as pd
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
-from nltk.sentiment import SentimentIntensityAnalyzer
-import nltk
+import pickle
 
-# Download NLTK data
-nltk.download('vader_lexicon')
+from random_forest_algorithm_with_sample_data import DrillingFaultPredictor  # Import from the same file or module
+
 
 # Set up environment and find Spark
 os.environ['PYSPARK_SUBMIT_ARGS'] = '--packages org.apache.spark:spark-streaming-kafka-0-10_2.12:3.2.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.0 pyspark-shell'
@@ -27,9 +26,6 @@ spark = SparkSession.builder \
     .appName("drilling-anomalie-detection") \
     .master("local[*]") \
     .getOrCreate()
-
-# Initialize sentiment analysis model
-sia = SentimentIntensityAnalyzer()
 
 # Define schema for incoming data
 json_schema = StructType([
@@ -51,29 +47,47 @@ df = spark \
 
 # Parse the JSON data and extract the features
 json_df = df.select(from_json(col("value").cast("string"), json_schema).alias("value"))
+features_df = json_df.select(
+    col("value.SPPA").cast("double").alias("SPPA"),
+    col("value.ROP30s").cast("double").alias("ROP30s"),
+    col("value.TQ30s").cast("double").alias("TQ30s"),
+    col("value.ECD_MW_IN").cast("double").alias("ECD_MW_IN")
+)
 
-# Extract text for sentiment analysis (adjust this based on your data)
-text_df = json_df.select(col("value.SPPA").alias("text"))
+# Load the trained model (assumes model is saved as 'model.pkl')
+with open('model.pkl', 'rb') as file:
+    predictor = pickle.load(file)
 
-# Define UDF for sentiment analysis
-def get_sentiment(text):
-    print(text)
-    if text is None:
-        return None
-    sentiment_score = sia.polarity_scores(text)
-    return sentiment_score['compound']
+def predict(features):
+    # Convert features to DataFrame
+    features_df = pd.DataFrame(features)
+    # Predict using the model
+    predictions = predictor.predict_new_data(features_df)
+    return predictions
 
-sentiment_udf = udf(get_sentiment, FloatType())
+def process_row(row):
+    features = {
+        'SPPA': row['SPPA'],
+        'ROP30s': row['ROP30s'],
+        'TQ30s': row['TQ30s'],
+        'ECD_MW_IN': row['ECD_MW_IN']
+    }
+    print(f'Raw features from row: {features}')
+    prediction = predict([features])
+    print(f'Prediction for features {features}: {prediction}')
 
-# Apply the UDF to get sentiment scores
-sentiment_df = text_df.withColumn("sentiment_score", sentiment_udf(col("text")))
+# Collect streaming data and process it
+def process_batch(df, batch_id):
+    # Collect and print the data for debugging
+    batch_df = df.toPandas()
+    print(f'Processing batch: {batch_id}')
+    print(batch_df.head())
+    for row in batch_df.itertuples(index=False):
+        process_row(row._asdict())
 
-# Output the sentiment analysis results to console
-query = sentiment_df.writeStream \
-    .format("console") \
+query = features_df.writeStream \
     .outputMode("append") \
+    .foreachBatch(process_batch) \
     .start()
-
-print(query)
 
 query.awaitTermination()
