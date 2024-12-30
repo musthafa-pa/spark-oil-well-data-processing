@@ -2,8 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sun Aug  4 19:22:30 2024
-
-@author: musthafa
 """
 
 import os
@@ -13,9 +11,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 import pickle
-
-from random_forest_algorithm_with_sample_data import DrillingFaultPredictor  # Import from the same file or module
-
+from random_forest_algorithm_with_sample_data import DrillingFaultPredictor  # Import your model class
 
 # Set up environment and find Spark
 os.environ['PYSPARK_SUBMIT_ARGS'] = '--packages org.apache.spark:spark-streaming-kafka-0-10_2.12:3.2.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.0 pyspark-shell'
@@ -65,26 +61,60 @@ def predict(features):
     predictions = predictor.predict_new_data(features_df)
     return predictions
 
+# Initialize an accumulator to store the features
+accumulator = {
+    'SPPA': [],
+    'ROP30s': [],
+    'TQ30s': [],
+    'ECD_MW_IN': []
+}
+
 def process_row(row):
-    features = {
-        'SPPA': row['SPPA'],
-        'ROP30s': row['ROP30s'],
-        'TQ30s': row['TQ30s'],
-        'ECD_MW_IN': row['ECD_MW_IN']
+    # Add the new row's features to the accumulator
+    accumulator['SPPA'].append(row['SPPA'])
+    accumulator['ROP30s'].append(row['ROP30s'])
+    accumulator['TQ30s'].append(row['TQ30s'])
+    accumulator['ECD_MW_IN'].append(row['ECD_MW_IN'])
+    
+    # Check if we have 10 data points accumulated
+    if len(accumulator['SPPA']) >= 10:
+        print("Processing accumulated data...")
+        # Get predictions for the accumulated data
+        features = {
+            'SPPA': accumulator['SPPA'],
+            'ROP30s': accumulator['ROP30s'],
+            'TQ30s': accumulator['TQ30s'],
+            'ECD_MW_IN': accumulator['ECD_MW_IN']
+        }
+        print(f'Raw features from accumulated data: {features}')
+        
+        # Get the prediction from the model
+        prediction = predict(features)
+        print(f'Prediction for accumulated data: {prediction}')
+        
+        # Reset the accumulator after processing
+        reset_data()
+
+def reset_data():
+    global accumulator
+    accumulator = {
+        'SPPA': [],
+        'ROP30s': [],
+        'TQ30s': [],
+        'ECD_MW_IN': []
     }
-    print(f'Raw features from row: {features}')
-    prediction = predict([features])
-    print(f'Prediction for features {features}: {prediction}')
 
 # Collect streaming data and process it
 def process_batch(df, batch_id):
-    # Collect and print the data for debugging
+    # Convert the Spark DataFrame batch to a Pandas DataFrame for further processing
     batch_df = df.toPandas()
     print(f'Processing batch: {batch_id}')
-    print(batch_df.head())
+    
+    # Iterate through each row of the batch and run the prediction
     for row in batch_df.itertuples(index=False):
         process_row(row._asdict())
 
+# Start the streaming query, processing each batch as it comes in
 query = features_df.writeStream \
     .outputMode("append") \
     .foreachBatch(process_batch) \
