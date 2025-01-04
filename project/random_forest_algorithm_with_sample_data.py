@@ -2,10 +2,10 @@ import pandas as pd
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, roc_auc_score, roc_curve
-from sklearn.inspection import PartialDependenceDisplay
 import matplotlib.pyplot as plt
 import joblib
 import logging
+import numpy as np
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 class DrillingFaultPredictor:
     def __init__(self, data):
         self.df = pd.DataFrame(data)
-        self.features = ['SPPA', 'ROP30s', 'TQ30s', 'ECD_MW_IN']
+        self.features = ['SPPA', 'CPPA', 'ROP']
         self.target = 'Failure'
         self.model = RandomForestClassifier(random_state=42)
 
@@ -85,26 +85,35 @@ class DrillingFaultPredictor:
         plt.show()
 
     def save_model(self, filename):
-        joblib.dump(self.model, filename)
+        joblib.dump(self, filename)
         logging.info(f"Model saved to {filename}")
 
-    def predict_new_data(self, new_data):
+    def predict_majority_for_entire_data(self, new_data):
         new_df = pd.DataFrame(new_data)
+        
+        # Ensure the new data contains all required features
+        missing_features = set(self.features) - set(new_df.columns)
+        if missing_features:
+            raise ValueError(f"New data is missing features: {missing_features}")
+    
 
         # Ensure the new data has the same features
         if set(self.features).difference(new_df.columns):
             raise ValueError("New data does not contain all required features.")
 
+        # Make predictions for each row in the new data
         predictions = self.model.predict(new_df[self.features])
-        return predictions
+
+        # Use majority vote to return a single prediction (0 or 1)
+        majority_prediction = np.bincount(predictions).argmax()  # 0 or 1 based on majority
+        return majority_prediction
 
 # Example usage
 if __name__ == "__main__":
     data = {
         'SPPA': [180, 200, 270, 200, 180, 200, 220, 500, 600, 700],
-        'ROP30s': [50, 55, 53, 47, 45, 60, 58, 52, 49, 50],
-        'TQ30s': [1000, 1050, 980, 1100, 1080, 1150, 1020, 995, 1180, 1110],
-        'ECD_MW_IN': [10, 10.5, 9.8, 11, 10.8, 11.5, 10.2, 9.9, 11.8, 11.1],
+        'CPPA': [50, 55, 53, 47, 45, 60, 58, 52, 49, 50],
+        'ROP': [53.1, 53.1, 53.1, 53.1, 53.1, 53.1,53.1, 53.1, 53.1, 53.1],
         'Failure': [0, 0, 0, 1, 0, 1, 0, 0, 1, 1]
     }
 
@@ -128,13 +137,13 @@ if __name__ == "__main__":
     # Save the model
     predictor.save_model('optimized_model.joblib')
 
-    # Predict new data
+    # Predict majority class for new data (entire dataset)
     new_data = {
-       'SPPA': [300, 320, 240, 360, 380, 400],
-       'ROP30s': [52, 48, 50, 48, 50, 48],
-       'TQ30s': [1050, 1120, 1085, 1050, 1050, 1050],
-       'ECD_MW_IN': [10.4, 11.2, 10.9, 10.4, 11.2, 10.4],
-       'Failure': [None, None, None, None, None, None]  # Placeholder for target variable
-   }
-    predictions = predictor.predict_new_data(new_data)
-    logging.info(f"Predictions: {predictions}")
+        'SPPA': [300, 320, 240, 360, 380, 400],
+        'CPPA': [52, 48, 50, 48, 50, 48],
+        'ROP': [53.1, 53.1, 53.1, 53.1, 53.1, 53.1],
+        'Failure': [None, None, None, None, None, None]  # Placeholder for target variable
+    }
+
+    majority_prediction = predictor.predict_majority_for_entire_data(new_data)
+    logging.info(f"Majority Prediction for Entire Data: {majority_prediction}")  # It will print either 0 or 1

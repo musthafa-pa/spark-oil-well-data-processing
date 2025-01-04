@@ -66,9 +66,8 @@ def process_well_data_for_all_subdirectories(main_dir, output_base_dir):
         
         logging.info(f"Processing well directory: {well_path}")
         
-        # Create output directory for the well (well directory should be the subdirectory)
-        well_name = os.path.basename(well_path)
-        output_dir = os.path.join(output_base_dir, well_name)
+        # Create output directory for the well
+        output_dir = os.path.join(output_base_dir, well_dir)
         
         # Create the output directory for the well if it doesn't exist
         if not os.path.exists(output_dir):
@@ -76,16 +75,13 @@ def process_well_data_for_all_subdirectories(main_dir, output_base_dir):
             logging.info(f"Created output directory for well: {output_dir}")
         
         # Recursively go through all subdirectories and find XML files
-        for root, dirs, files in os.walk(well_path):
-            logging.info(f"Processing directory: {root}")
-            # Look through all directories, including nested ones
+        for root, _, files in os.walk(well_path):
             for file in files:
                 if file.endswith('.xml'):
                     xml_file_path = os.path.join(root, file)
-                    logging.info(f"Processing XML file: {xml_file_path}")
                     parse_xml_to_dict(xml_file_path, output_dir)
 
 # Example usage
-main_dir = '/Users/musthafa/softway/DAI/DATASET/sitecom14.statoil.no/Norway-Statoil-NO 15_$47$_9-F-7'  # Main well directory
-output_base_dir = '/Users/musthafa/softway/DAI/spark-data-processing/well_data/Norway-Statoil-NO 15_$47$_9-F-7'  # Output base directory
+main_dir = '/Users/musthafa/softway/DAI/DATASET/sitecom14.statoil.no'  # Main well directory
+output_base_dir = '/Users/musthafa/softway/DAI/spark-data-processing/well_data'  # Output base directory
 process_well_data_for_all_subdirectories(main_dir, output_base_dir)
